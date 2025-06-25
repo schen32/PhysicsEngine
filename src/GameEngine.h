@@ -18,7 +18,10 @@ protected:
 	std::string m_nextScene = "";
 	SceneMap m_sceneMap;
 	size_t m_simulationSpeed = 1;
+	float m_framesPerSecond = 60.0f;
 	sf::Clock m_deltaClock;
+	int32_t m_previousTime = 0;
+	int32_t m_lag = 0;
 	bool m_running = true;
 
 	void init(const std::string& path);

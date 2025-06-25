@@ -18,7 +18,6 @@ void GameEngine::init(const std::string& path)
 
 	auto videoMode = sf::VideoMode({ 1920, 1080 });
 	m_window.create(videoMode, "Game Engine", sf::Style::Default);
-	m_window.setFramerateLimit(60);
 
 	/*if (!ImGui::SFML::Init(m_window))
 	{
@@ -34,6 +33,28 @@ std::shared_ptr<Scene> GameEngine::currentScene()
 	return m_sceneMap[m_currentScene];
 }
 
+bool GameEngine::changeScene(const std::string& sceneName, std::shared_ptr<Scene> scene,
+	bool endCurrentScene)
+{
+	if (scene)
+	{
+		m_sceneMap[sceneName] = scene;
+	}
+	else if (m_sceneMap.find(sceneName) == m_sceneMap.end())
+	{
+		std::cerr << "Warning: Scene does not exist: " << sceneName << std::endl;
+		return false;
+	}
+
+	if (endCurrentScene)
+	{
+		m_sceneMap.erase(m_sceneMap.find(m_currentScene));
+	}
+
+	m_nextScene = sceneName;
+	return true;
+}
+
 bool GameEngine::isRunning()
 {
 	return m_running && m_window.isOpen();
@@ -46,6 +67,7 @@ sf::RenderWindow& GameEngine::window()
 
 void GameEngine::run()
 {
+	m_previousTime = m_deltaClock.getElapsedTime().asMilliseconds();
 	while (isRunning())
 	{
 		if (!m_nextScene.empty())
@@ -65,6 +87,45 @@ void GameEngine::run()
 	//ImGui::SFML::Shutdown();
 	m_window.close();
 	
+}
+
+void GameEngine::update()
+{
+	if (!isRunning() || m_sceneMap.empty()) return;
+
+	sUserInput();
+
+	auto current = m_deltaClock.getElapsedTime().asMilliseconds();
+	auto elapsed = current - m_previousTime;
+	m_previousTime = current;
+	m_lag += elapsed;
+
+	float MS_PER_UPDATE = (1.0f / m_framesPerSecond) * 1000.0f;
+	while (m_lag >= MS_PER_UPDATE)
+	{
+		currentScene()->simulate(m_simulationSpeed);
+		m_lag -= MS_PER_UPDATE;
+	}
+
+	currentScene()->sRender();
+
+	// ImGui::SFML::Render(m_window);
+	m_window.display();
+}
+
+void GameEngine::quit()
+{
+	m_running = false;
+}
+
+const Assets& GameEngine::assets() const
+{
+	return m_assets;
+}
+
+Assets& GameEngine::assets()
+{
+	return m_assets;
 }
 
 void GameEngine::sUserInput()
@@ -89,8 +150,8 @@ void GameEngine::sUserInput()
 			(
 				Action
 				(
-				currentScene()->getKeyActionMap().at(keyPressed->scancode),
-				"START"
+					currentScene()->getKeyActionMap().at(keyPressed->scancode),
+					"START"
 				)
 			);
 		}
@@ -114,17 +175,17 @@ void GameEngine::sUserInput()
 
 		if (const auto* mousePressed = event->getIf<sf::Event::MouseButtonPressed>())
 		{
-            if (currentScene()->m_mouseActionMap.find(mousePressed->button) != currentScene()->m_mouseActionMap.end())  
-            {  
-                currentScene()->doAction  
-                (  
-                    Action  
-                    (  
-                        currentScene()->getMouseActionMap().at(mousePressed->button),  
-                        "START", mousePressed->position  
-                    )
-                );
-            }
+			if (currentScene()->m_mouseActionMap.find(mousePressed->button) != currentScene()->m_mouseActionMap.end())
+			{
+				currentScene()->doAction
+				(
+					Action
+					(
+						currentScene()->getMouseActionMap().at(mousePressed->button),
+						"START", mousePressed->position
+					)
+				);
+			}
 		}
 
 		if (const auto* mouseReleased = event->getIf<sf::Event::MouseButtonReleased>())
@@ -152,54 +213,4 @@ void GameEngine::sUserInput()
 			currentScene()->doAction(Action("MOUSE_SCROLL", "START", mouseWheelScrolled->delta));
 		}
 	}
-}
-
-bool GameEngine::changeScene(const std::string& sceneName, std::shared_ptr<Scene> scene,
-	bool endCurrentScene)
-{
-	if (scene)
-	{
-		m_sceneMap[sceneName] = scene;
-	}
-	else if (m_sceneMap.find(sceneName) == m_sceneMap.end())
-	{
-		std::cerr << "Warning: Scene does not exist: " << sceneName << std::endl;
-		return false;
-	}
-
-	if (endCurrentScene)
-	{
-		m_sceneMap.erase(m_sceneMap.find(m_currentScene));
-	}
-
-	m_nextScene = sceneName;
-	return true;
-}
-
-void GameEngine::quit()
-{
-	m_running = false;
-}
-
-const Assets& GameEngine::assets() const
-{
-	return m_assets;
-}
-
-Assets& GameEngine::assets()
-{
-	return m_assets;
-}
-
-void GameEngine::update()
-{
-	if (!isRunning()) return;
-	if (m_sceneMap.empty()) return;
-
-	sUserInput();
-	currentScene()->simulate(m_simulationSpeed);
-	currentScene()->sRender();
-
-	//ImGui::SFML::Render(m_window);
-	m_window.display();
 }
